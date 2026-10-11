@@ -21,3 +21,5 @@ Plano H3.1 (tripo-v3.1 / v3.1-20260211): dry-run válido, sem avisos; nenhuma ta
 Anexo recuperado da conversa é uma captura da interface, não uma foto de ambiente; precisa de foto real para teste útil.
 GitHub: branch backup/2026-10-11-photo-reconstruction no repositório paulogrochowski/Siviu3Dspaceuser; envio e SHA remoto verificados.
 Geração paga e validação visual de GLB continuam pendentes. Nada publicado.
+
+Correção de origem: reproduzido HTTP 403 com Origin http://127.0.0.1:3010. Comparação ajustada para Host do navegador, pois request.url usa hostname interno. Compilação passou; página 200; origem local com corpo inválido 400; origem externa e origem null 403. Nenhuma geração paga disparada neste diagnóstico.

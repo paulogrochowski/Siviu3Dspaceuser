@@ -24,8 +24,19 @@ export async function POST(request: Request) {
   }
 
   const origin = request.headers.get('origin');
-  if (origin && origin !== new URL(request.url).origin) {
-    return NextResponse.json({ error: 'Origem não permitida.' }, { status: 403 });
+  if (origin) {
+    const requestUrl = new URL(request.url);
+    // Next.js may use an internal hostname in request.url; Host is the address used by the browser.
+    const expectedOrigin = `${requestUrl.protocol}//${request.headers.get('host') || requestUrl.host}`;
+    let allowed = false;
+    try {
+      allowed = new URL(origin).origin === new URL(expectedOrigin).origin;
+    } catch {
+      allowed = false;
+    }
+    if (!allowed) {
+      return NextResponse.json({ error: 'Origem não permitida.' }, { status: 403 });
+    }
   }
 
   let formData: FormData;
