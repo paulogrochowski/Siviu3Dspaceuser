@@ -1,0 +1,80 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+.turbo/
+
+# Environment variables — NEVER commit
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Service account keys — NEVER commit
+*service-account*.json
+*serviceAccount*.json
+*credentials*.json
+
+# Testing
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# TypeScript
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# 3D assets (large binaries — tracked via LFS or excluded)
+# Uncomment if using Git LFS instead:
+# *.glb
+# *.gltf
+# *.usdz
+# *.ktx2
+
+# Temporary
+tmp/
+temp/
+.cache/
+
+# Vercel
+.vercel
+
+# Next.js
+.next/
+out/
+
+# Turbopack
+.turbo/
+
+# Local recovery snapshots
+backups/
