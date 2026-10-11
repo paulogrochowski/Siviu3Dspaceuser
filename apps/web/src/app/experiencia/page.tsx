@@ -35,6 +35,7 @@ const finishes = ['Original', 'Claro', 'Escuro', 'Quente'];
 export default function ExperienciaPage() {
   const [roomImage, setRoomImage] = useState<string | null>(null);
   const [environmentModelUrl, setEnvironmentModelUrl] = useState<string | null>(null);
+  const [geometryOnly, setGeometryOnly] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductId | null>(null);
   const [placed, setPlaced] = useState<ProductId[]>([]);
   const [finish, setFinish] = useState('Original');
@@ -67,15 +68,21 @@ export default function ExperienciaPage() {
     try {
       const formData = new FormData();
       formData.append('image', file);
+      formData.append('geometryOnly', geometryOnly ? 'true' : 'false');
 
       const response = await fetch('/api/experience/reconstruct', {
         method: 'POST',
         body: formData,
       });
 
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.includes('application/json')) {
+        throw new Error(`O servidor não devolveu JSON (HTTP ${response.status}). Atualize a página e tente novamente; se persistir, verifique o túnel.`);
+      }
       const payload = (await response.json()) as {
         modelUrl?: string;
         error?: string;
+        code?: string;
       };
 
       if (!response.ok || !payload.modelUrl) {
@@ -91,6 +98,24 @@ export default function ExperienciaPage() {
       setReconstructionError(
         error instanceof Error ? error.message : 'Falha na reconstrução do ambiente.',
       );
+    }
+  };
+
+  const loadPreviousModel = async () => {
+    ++latestRequest.current;
+    try {
+      const response = await fetch('/api/experience/last-model', { cache: 'no-store' });
+      const payload = (await response.json()) as { modelUrl?: string; error?: string };
+      if (!response.ok || !payload.modelUrl) throw new Error(payload.error || 'Modelo anterior indisponível.');
+      setRoomImage(null);
+      setEnvironmentModelUrl(payload.modelUrl);
+      setSelectedProduct(null);
+      setPlaced([]);
+      setReconstructionError(null);
+      setReconstructionState('ready');
+    } catch (error) {
+      setReconstructionError(error instanceof Error ? error.message : 'Não foi possível carregar o modelo anterior.');
+      setReconstructionState('error');
     }
   };
 
@@ -156,6 +181,24 @@ export default function ExperienciaPage() {
                 </p>
               </div>
 
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={geometryOnly}
+                  onChange={(event) => setGeometryOnly(event.target.checked)}
+                  disabled={reconstructionState === 'processing'}
+                  className="h-4 w-4 accent-cyan-400"
+                />
+                Apenas geometria, sem textura (20 créditos)
+              </label>
+              <button
+                type="button"
+                onClick={loadPreviousModel}
+                className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs font-medium text-cyan-200 hover:bg-cyan-400/20"
+                title="Abre um modelo GLB gerado antes, sem consumir créditos."
+              >
+                Ver GLB anterior (grátis)
+              </button>
               <label className="cursor-pointer rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium hover:bg-white/10">
                 <span className="inline-flex items-center gap-2">
                   <ImagePlus className="h-4 w-4" />
@@ -171,7 +214,14 @@ export default function ExperienciaPage() {
             </div>
 
             <div className="relative min-h-[560px] bg-[#090b10]">
-              {!roomImage ? (
+              {reconstructionState === 'ready' && environmentModelUrl ? (
+                <ExperienceScene
+                  environmentModelUrl={environmentModelUrl}
+                  placed={placed}
+                  selected={selectedProduct}
+                  finish={finish}
+                />
+              ) : !roomImage ? (
                 <label className="absolute inset-0 grid cursor-pointer place-items-center p-8">
                   <div className="max-w-md text-center">
                     <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10">
@@ -193,13 +243,6 @@ export default function ExperienciaPage() {
                     />
                   </div>
                 </label>
-              ) : reconstructionState === 'ready' && environmentModelUrl ? (
-                <ExperienceScene
-                  environmentModelUrl={environmentModelUrl}
-                  placed={placed}
-                  selected={selectedProduct}
-                  finish={finish}
-                />
               ) : (
                 <div className="absolute inset-0 grid place-items-center overflow-hidden">
                   <img src={roomImage} alt="Ambiente escolhido" className="h-full w-full object-cover opacity-45" />

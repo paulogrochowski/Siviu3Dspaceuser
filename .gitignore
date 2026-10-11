@@ -78,3 +78,6 @@ out/
 
 # Local recovery snapshots
 backups/
+
+# Generated 3D assets are user data, not source code
+/apps/web/public/generated/environments/

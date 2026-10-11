@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { NextResponse } from 'next/server';
-import { TripoClient, TripoTaskError } from '@vastai/tripo-sdk';
+import { TripoAPIError, TripoClient, TripoTaskError } from '@vastai/tripo-sdk';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -65,6 +65,9 @@ export async function POST(request: Request) {
     );
   }
 
+  const geometryOnly = formData.get('geometryOnly') === 'true';
+  const requiredCredits = geometryOnly ? 20 : 30;
+
   const client = new TripoClient({
     apiKey,
     baseUrl: 'https://openapi.tripo3d.ai/v3',
@@ -73,6 +76,18 @@ export async function POST(request: Request) {
   });
 
   try {
+    // Prevent creating a billable task that is known to exceed the available credits.
+    const balanceInfo = await client.getBalance();
+    const availableCredits = Number(balanceInfo.balance);
+    if (Number.isFinite(availableCredits) && availableCredits < requiredCredits) {
+      return NextResponse.json({
+        error: `O Tripo tem ${availableCredits} créditos disponíveis, mas esta geração precisa de ${requiredCredits}. ${geometryOnly ? 'Créditos insuficientes até para o modo sem textura.' : 'Ative o modo de teste sem textura (20 créditos) ou recarregue a conta para gerar com textura.'}`,
+        code: 'INSUFFICIENT_TRIPO_CREDITS',
+        availableCredits,
+        requiredCredits,
+      }, { status: 402 });
+    }
+
     const inputBuffer = await file.arrayBuffer();
 
     const uploaded = await client.uploadFile(inputBuffer, {
@@ -84,9 +99,9 @@ export async function POST(request: Request) {
       input: uploaded.file_token,
       model: 'v3.1-20260211',
       enable_image_autofix: true,
-      texture: true,
-      pbr: true,
-      texture_quality: 'standard',
+      texture: !geometryOnly,
+      pbr: !geometryOnly,
+      ...(geometryOnly ? {} : { texture_quality: 'standard' as const }),
       geometry_quality: 'standard',
       texture_alignment: 'original_image',
       auto_size: true,
@@ -102,7 +117,7 @@ export async function POST(request: Request) {
     if (!task.output?.model_url) {
       return NextResponse.json(
         { error: 'O Tripo terminou a geração, mas não devolveu o modelo 3D.', taskId },
-        { status: 502 },
+        { status: 424 },
       );
     }
 
@@ -111,14 +126,14 @@ export async function POST(request: Request) {
     if (!downloaded?.data) {
       return NextResponse.json(
         { error: 'O modelo 3D foi gerado, mas não foi possível baixá-lo.', taskId },
-        { status: 502 },
+        { status: 424 },
       );
     }
 
     const modelBytes = Buffer.from(downloaded.data);
     if (modelBytes.length < 12 || modelBytes.toString('ascii', 0, 4) !== 'glTF' ||
         modelBytes.readUInt32LE(4) !== 2 || modelBytes.readUInt32LE(8) !== modelBytes.length) {
-      return NextResponse.json({ error: 'O serviço devolveu um modelo 3D inválido.', taskId }, { status: 502 });
+      return NextResponse.json({ error: 'O serviço devolveu um modelo 3D inválido.', taskId }, { status: 424 });
     }
 
     const outputDir = path.join(process.cwd(), 'public', 'generated', 'environments');
@@ -138,6 +153,9 @@ export async function POST(request: Request) {
       creditsConsumed: task.credits_consumed ?? null,
     });
   } catch (error) {
+    if (error instanceof TripoAPIError && error.code === 2010) {
+      return NextResponse.json({ error: 'Créditos insuficientes na conta Tripo. Tente o modo sem textura (20 créditos) ou consulte o saldo.', code: 'INSUFFICIENT_TRIPO_CREDITS' }, { status: 402 });
+    }
     if (error instanceof TripoTaskError) {
       return NextResponse.json(
         {
@@ -145,10 +163,10 @@ export async function POST(request: Request) {
           code: error.errorCode ?? 'TRIPO_TASK_FAILED',
           taskId: error.task?.task_id,
         },
-        { status: 502 },
+        { status: 424 },
       );
     }
 
-    return NextResponse.json({ error: 'Não foi possível concluir a reconstrução. Tente novamente mais tarde.', code: 'TRIPO_REQUEST_FAILED' }, { status: 502 });
+    return NextResponse.json({ error: 'Não foi possível concluir a reconstrução. Tente novamente mais tarde.', code: 'TRIPO_REQUEST_FAILED' }, { status: 424 });
   }
 }
